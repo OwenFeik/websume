@@ -1,0 +1,146 @@
+html {
+    --colour-raisin-black: #272838ff;
+    --colour-buff: #f3de8aff;
+    --colour-vivid-tangerine: #eb9486ff;
+    --colour-rhythm: #7e7f9aff;
+    --colour-cultured: #f9f8f8ff;
+
+    background-color: var(--colour-raisin-black);
+    font-family: sans-serif;
+    
+    /*
+    Always show scrollbar, thus avoiding content twitching when switching
+    to longer tab.
+    */
+    height: 101%;
+}
+
+body {
+    align-items: center;
+    display: flex;
+    flex-direction: column;
+    text-align: center;
+}
+
+/* Tabbed view */
+
+.tabbed {
+    --border-rad: 0.5em;
+
+    align-items: center;
+    display: flex;
+    flex-direction: column;
+    width: min(100%, 720px);
+}
+
+.tab_header {
+    background-color: var(--colour-rhythm);
+    border-radius: var(--border-rad);
+    display: flex;
+    font-size: larger;
+    width: 100%;
+    user-select: none;
+}
+
+.tab {
+    color: var(--colour-buff);
+    cursor: pointer;
+    flex-grow: 1;
+    font-weight: bold;
+    padding: 0.25em;
+}
+
+.tab.active {
+    background-color: var(--colour-cultured);
+    border-radius: var(--border-rad);
+    color: var(--colour-vivid-tangerine);
+}
+
+.tab_body {
+    width: 100%;
+}
+
+.tab_content {
+    background-color: var(--colour-rhythm);
+    border-radius: var(--border-rad);
+    display: none;
+    margin-top: 10px;
+    width: 100%;
+}
+
+.tab_content.active {
+    display: block;
+}
+
+.tab_content_card {
+    background-color: var(--colour-cultured);
+    border-radius: var(--border-rad);
+    display: inline-flex;
+    margin: 1em;
+    margin-bottom: 0;
+    padding: 1em;
+    width: calc(100% - 4em);
+}
+
+.tab_content_card:last-of-type {
+    margin-bottom: 1em;
+}
+
+.tab_content_card_preview {
+    width: 30%;
+}
+
+.tab_content_card_title {
+    color: var(--colour-vivid-tangerine);
+    font-size: medium;
+    font-weight: bold;
+    left: 0;
+    padding-bottom: 0.25em;
+    position: relative;
+    text-align: left;
+    top: 0;
+}
+
+.tab_content_card_title.monospace {
+    font-size: x-large;
+}
+
+.tab_content_card_image {
+    border-radius: var(--border-rad);
+    width: 100%;
+}
+
+.tab_content_card_image.shrink {
+    height: 100px;
+    width: auto;
+}
+
+.tab_content_card_content {
+    margin-left: 1em;
+    margin-top: 4px;
+    text-align: left;
+    width: 65%;
+}
+
+.tab_content_card_content:only-child {
+    width: 100%;
+}
+
+/* End tabbed view */
+
+/* Misc */
+:link {
+    color: var(--colour-vivid-tangerine);
+}
+
+:visited {
+    color: var(--colour-rhythm);
+}
+
+.monospace {
+    font-family: monospace;
+    font-size: large;
+    font-weight: bold;
+}
+
+/* End misc */
