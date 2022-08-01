@@ -1,33 +1,13 @@
-/* Global */
-
-html {
-    --colour-raisin-black: #272838ff;
-    --colour-buff: #f3de8aff;
-    --colour-vivid-tangerine: #eb9486ff;
-    --colour-rhythm: #7e7f9aff;
-    --colour-cultured: #f9f8f8ff;
-
-    background-color: var(--colour-raisin-black);
-    font-family: "DejaVu Sans";
-    
-    /*
-    Always show scrollbar, thus avoiding content twitching when switching
-    to longer tab.
-    */
-    height: 101%;
+.title {
+    color: var(--colour-rhythm);
 }
 
-body {
+.main {
     align-items: center;
     display: flex;
     flex-direction: column;
     text-align: center;
 }
-
-/* End global */
-
-
-/* Tabbed view */
 
 .tabbed {
     --border-rad: 0.5em;
@@ -62,6 +42,7 @@ body {
 }
 
 .tab_body {
+    margin-bottom: 1em;
     width: 100%;
 }
 
@@ -81,10 +62,9 @@ body {
     background-color: var(--colour-cultured);
     border-radius: var(--border-rad);
     display: inline-flex;
-    margin: 1em;
-    margin-bottom: 0;
+    margin-top: 1em;
     padding: 1em;
-    width: calc(100% - 4em);
+    width: calc(100% - 2em);
 }
 
 .tab_content_card:last-of-type {
@@ -112,6 +92,8 @@ body {
 
 .tab_content_card_image {
     border-radius: var(--border-rad);
+    position: relative;
+    height: calc(100% - 2.25em);
     width: 100%;
 }
 
@@ -131,51 +113,8 @@ body {
     width: 100%;
 }
 
-/* End tabbed view */
-
-
-/* Misc */
-
-:link {
-    color: var(--colour-vivid-tangerine);
-}
-
-:visited {
-    color: var(--colour-rhythm);
-}
-
 .monospace {
-    font-family: "DejaVu Sans Mono";
+    font-family: DejaVu Sans Mono;
     font-size: normal;
     font-weight: bold;
 }
-
-/* End misc */
-
-
-/* Fonts */
-
-@font-face {
-    font-family: "DejaVu Sans";
-    src: url("res/fonts/dejavu_sans.ttf");
-}
-
-@font-face {
-    font-family: "DejaVu Sans";
-    font-weight: bold;
-    src: url("res/fonts/dejavu_sans_bold.ttf");
-}
-
-@font-face {
-    font-family: "DejaVu Sans Mono";
-    font-weight: normal;
-    src: url("res/fonts/dejavu_sans_mono.ttf");
-}
-
-@font-face {
-    font-family: "DejaVu Sans Mono";
-    font-weight: bold;
-    src: url("res/fonts/dejavu_sans_mono_bold.ttf");
-}
-
-/* End fonts */
