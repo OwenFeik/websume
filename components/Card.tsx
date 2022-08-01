@@ -31,7 +31,6 @@ export default function Card(content: CardContent): JSX.Element {
                     <div className={styles.tab_content_card_image}>
                         <Image
                             src={content.image}
-                            width="100%"
                             objectFit="cover"
                             objectPosition="0 0"
                             layout="fill"
