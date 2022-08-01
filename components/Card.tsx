@@ -1,45 +1,58 @@
 import Image from "next/image"
 import styles from "../styles/Home.module.css"
 
-interface CardContent {
+interface CardProps {
     title: string,
     link?: string,
     monospace?: boolean,
     image?: string,
-    body: JSX.Element[],
+    contain?: boolean,
+    children: JSX.Element[] | JSX.Element,
 }
 
-export default function Card(content: CardContent): JSX.Element {
+export default function Card(props: CardProps): JSX.Element {
     let titleText
-    if (content.link) {
-        titleText = <a href={content.link}>{content.title}</a>
+    if (props.link) {
+        titleText = <a href={props.link}>{props.title}</a>
     }
     else {
-        titleText = content.title
+        titleText = props.title
     }
     
-    if (content.image) {
+    if (props.image) {
+        let image;
+        if (props.contain) {
+            image = <Image
+                src={props.image}
+                objectFit="contain"
+                layout="fill"
+            />
+        }
+        else {
+            image = <Image
+                src={props.image}
+                objectFit="cover"
+                objectPosition="0 0"
+                layout="fill"
+                style={{ borderRadius: "var(--border-rad)" }}
+            />
+        }
+
         return (
             <div className={styles.tab_content_card}>
                 <div className={styles.tab_content_card_preview}>
                     <div
                         className={
                             styles.tab_content_card_title
-                            + (content.monospace ? " " + styles.monospace : "")
+                            + (props.monospace ? " " + styles.monospace : "")
                         }
                     >{titleText}</div>
                     <div className={styles.tab_content_card_image}>
-                        <Image
-                            src={content.image}
-                            objectFit="cover"
-                            objectPosition="0 0"
-                            layout="fill"
-                            style={{ borderRadius: "var(--border-rad)" }}
-                        />
+                        {image}
                     </div>
                 </div>
                 <div className={styles.tab_content_card_content}>
-                    {content.body}
+                    {props.children}
                 </div>
             </div>
         )
@@ -49,9 +62,9 @@ export default function Card(content: CardContent): JSX.Element {
             <div className={styles.tab_content_card}>
                 <div className={styles.tab_content_card_content}>
                     <div className={styles.tab_content_card_title}>
-                        {content.title}
+                        {props.title}
                     </div>
-                    {content.body}
+                    {props.children}
                 </div>
             </div>
         )    
