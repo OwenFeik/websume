@@ -49,6 +49,7 @@ export default class Tabs extends Component {
                         this.children.map(
                             tab => (
                                 <Tab
+                                    key={tab.props.title.toLowerCase()}
                                     activeTab={this.state.activeTab}
                                     title={tab.props.title}
                                 >{tab.props.children}</Tab>

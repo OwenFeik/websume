@@ -23,6 +23,7 @@ export default function Card(props: CardProps): JSX.Element {
         let image;
         if (props.contain) {
             image = <Image
+                alt={props.title}
                 src={props.image}
                 objectFit="contain"
                 layout="fill"
@@ -30,6 +31,7 @@ export default function Card(props: CardProps): JSX.Element {
         }
         else {
             image = <Image
+                alt={props.title}
                 src={props.image}
                 objectFit="cover"
                 objectPosition="0 0"
