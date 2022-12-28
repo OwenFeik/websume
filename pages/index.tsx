@@ -92,7 +92,7 @@ const Home: NextPage = () => {
                         </Card>
                         <Card title="and more..." monospace={true}>
                             <p>
-                                To see everything that I&apos;m publicly working on, you can check
+                                To see everything that I'm publicly working on, you can check
                                 out <a href="https://github.com/OwenFeik/">my GitHub profile</a>.
                             </p>                
                         </Card>
@@ -103,7 +103,7 @@ const Home: NextPage = () => {
                                 <i>General Technical Assistant, 2019 - Present</i>
                             </p>
                             <p>
-                                Seen Technology is a digital signage firm which I&apos;ve worked at part-time since
+                                Seen Technology is a digital signage firm which I've worked at part-time since
                                 finishing high school. My responsibilies have been varied during my time there
                                 and included
                             </p>
@@ -154,7 +154,7 @@ const Home: NextPage = () => {
                     <Tab title="Skills">
                         <Card title="Python Development" image="/images/python.svg" contain={true}>
                             <p>
-                                Experienced Python developer, largely in hobby projects though I&apos;ve contributed
+                                Experienced Python developer, largely in hobby projects though I've contributed
                                 some code to open source and written some that is in use in a business
                                 environment. Have been working with python for more than 5 years.
                             </p>
@@ -164,7 +164,7 @@ const Home: NextPage = () => {
                         </Card>
                         <Card title="Other Programming Languages">
                             <p>
-                                I&apos;ve worked some amount with the below languages. I routinely try out new
+                                I've worked some amount with the below languages. I routinely try out new
                                 languages as I need them for an application or just for fun and feel
                                 comfortable slipping into a new language as needed.
                             </p>
@@ -175,13 +175,13 @@ const Home: NextPage = () => {
                                 <li>PHP</li>
                             </ul>
                             <p>
-                                Other languages that I&apos;ve touched briefly include Rust, Prolog and Haskell.
+                                Other languages that I've touched briefly include Rust, Prolog and Haskell.
                             </p>
                         </Card>
                         <Card title="DevOps Tools" image="/images/docker.png" contain={true}>
                             <p>
                                 Having used Linux as a daily driver for several years, including to deploy
-                                applications, I&apos;m comfortable with many common Dev Ops utilies including
+                                applications, I'm comfortable with many common Dev Ops utilies including
                             </p>
                             <ul>
                                 <li>Docker</li>
@@ -196,7 +196,7 @@ const Home: NextPage = () => {
                         </Card>
                         <Card title="Other Software Tools">
                             <p>
-                                I&apos;m confident in using many common pieces of software, including
+                                I'm confident in using many common pieces of software, including
                             </p>
                             <ul>
                                 <li>Microsoft Office/Google Suite</li>
