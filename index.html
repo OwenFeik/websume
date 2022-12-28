@@ -19,6 +19,65 @@
                 <div class="tab_content_card">
                     <div class="tab_content_card_preview">
                         <div class="tab_content_card_title monospace">
+                            Realm View
+                        </div>
+                        <video
+                            class="tab_content_card_image"
+                            controls
+                        >
+                            <source src="res/images/realmview.mp4">
+                            <a href="res/images/realmview.mp4">Download MP4</a>
+                        </video>
+                    </div>
+                    <div class="tab_content_card_content">
+                        <p>
+                            <b>Realm View</b> is a website which provides tools
+                            to create and host battlemaps for RPG games like
+                            dungeons and dragons.
+                        </p>
+                        <p>
+                            It allows users to upload and manage a library of
+                            media, use it in scenes and present those scenes to
+                            players.
+                        </p>
+                        <p>
+                            <b>Realm View</b> is made up of several components
+                        </p>
+                        <ul>
+                            <li>
+                                A collection of web pages written in a <a
+                                    href="https://github.com/OwenFeik/realmview/tree/master/web#readme"
+                                >custom HTML templating language</a> and
+                                compiled with a <a
+                                    href="https://github.com/OwenFeik/realmview/blob/master/web/build.py"
+                                >Python script</a>.
+                            </li>
+                            <li>
+                                A backend server written in Rust, using <a
+                                    href="https://crates.io/crates/warp"
+                                    class="monospace"
+                                >warp</a>, which provides the API and runs game
+                                servers for live sessions using WebSockets.
+                            </li>
+                            <li>
+                                A frontend client, also written in Rust, which
+                                communicates using a <a
+                                    href="https://github.com/OwenFeik/realmview/blob/master/scene/src/comms.rs"
+                                >hand-rolled event system</a> in order to sync
+                                game state with the server.
+                            </li>
+                        </ul>
+                        <p>
+                            It is currently under active development. The
+                            source code is available <a
+                                href="https://github.com/OwenFeik/realmview"
+                            > on GitHub</a>.
+                        </p>
+                    </div>
+                </div>
+                <div class="tab_content_card">
+                    <div class="tab_content_card_preview">
+                        <div class="tab_content_card_title monospace">
                             <a href="https://pypi.org/project/architrice/">
                                 architrice
                             </a>
@@ -128,19 +187,19 @@
                     </div>
                     <div class="tab_content_card_content">
                         <p>
-                            Spells is a Python app which provides a CLI
+                            <b>Spells</b> is a Python app which provides a CLI
                             character sheet for the roleplaying game Dungeons
                             and Dragons.
                         </p>
                         <p>
-                            Spells allows users to track their characters
-                            levels, spell slots and hit points, among other
-                            things. It provides search facilities for a local
-                            library of spells. It supports taking and managing
-                            notes and rolling dice.
+                            <b>Spells</b> allows users to track their
+                            characters' levels, spell slots and hit points,
+                            among other things. It provides search facilities
+                            for a local library of spells. It supports taking
+                            and managing notes and rolling dice.
                         </p>
                         <p>
-                            The source code for Spells is available
+                            The source code for </b>Spells</b> is available
                             <a href="https://github.com/OwenFeik/owen-bot">
                             on GitHub</a>.
                         </p>
@@ -180,15 +239,17 @@
                         </p>
                         <ul>
                             <li>
-                                Working on bug fixes and feature updates for
-                                Seen Content Management Platform, a
-                                webpage and server operating on a Dockerised
-                                LEMP stack.
+                                Working on Seen CMP, a LAMP stack website. This
+                                includes both maintenance work and greenfield
+                                development such as the addition of a public
+                                API, XML ingestion configuration tool and
+                                integration with other services (among other
+                                projects).
                             </li>
                             <li>
                                 Developing various applets for installations in
                                 client stores, such as wayfinding software and
-                                interior design visualisation.
+                                interior design visualisation projects.
                             </li>
                             <li>
                                 Developed an application for creation and
@@ -221,15 +282,10 @@
                         >
                     </div>
                     <div class="tab_content_card_content">
-                        <p><i>2020 - 2022 (expected)</i></p>
+                        <p><i>2020 - 2022</i></p>
                         <p>
-                            Began attending in 2020, planned graduation end of
-                            year 2022.
-                        </p>
-                        <p>
-                            Currently studying for a Bachelor of Science
-                            majoring in Computing and Software Systems, with
-                            breadth studies in Economics and Mathematics.
+                            Bachelor of Science majoring in Computing and
+                            Software Systems. WAM 80.
                         </p>
                     </div>
                 </div>
@@ -255,49 +311,30 @@
             </div>
             <div class="tab_content" data-tab="skills">
                 <div class="tab_content_card">
-                    <div class="tab_content_card_preview">
-                        <div class="tab_content_card_title">
-                            Python Development
-                        </div>
-                        <img
-                            class="tab_content_card_image shrink"
-                            src="res/images/python.svg"
-                        >
-                    </div>
-                    <div class="tab_content_card_content">
-                        <p>
-                            Experienced Python developer, largely in hobby
-                            projects though I've contributed some code to open
-                            source and written some that is in use in a business
-                            environment. Have been working with python for more
-                            than 5 years.
-                        </p>
-                        <p>
-                            See the projects tab above for some examples of my
-                            Python development.
-                        </p>
-                    </div>
-                </div>
-                <div class="tab_content_card">
                     <div class="tab_content_card_content">
                         <div class="tab_content_card_title">
-                            Other Programming Languages
+                            Programming Languages
                         </div>
                         <p>
-                            I've worked some amount with the below languages.
+                            I've worked a healthy amount with all of the below
+                            languages, whether professionally, as part of my
+                            education, or out of personal interest.
+                        </p>
+                        <ul>
+                            <li>Python</li>
+                            <li>Rust</li>
+                            <li>JavaScript, HTML, CSS</li>
+                            <li>C</li>
+                            <li>PHP</li>
+                            <li>Java</li>
+                        </ul>
+                        <p>
                             I routinely try out new languages as I need them for
                             an application or just for fun and feel comfortable
                             slipping into a new language as needed.
-                        </p>
-                        <ul>
-                            <li>JavaScript, HTML, CSS</li>
-                            <li>C</li>
-                            <li>Java</li>
-                            <li>PHP</li>
-                        </ul>
-                        <p>
+
                             Other languages that I've touched briefly include
-                            Rust, Prolog and Haskell.
+                            Prolog and Haskell.
                         </p>
                     </div>
                 </div>
@@ -320,10 +357,6 @@
                         </p>
                         <ul>
                             <li>Docker</li>
-                            <li>Git</li>
-                            <li>Bash</li>
-                            <li>Regular expressions</li>
-                            <li>Virtual machines</li>
                             <li>SQL databases</li>
                             <li>AWS and Microsoft Azure</li>
                             <li>Ubuntu, CentOS/RHEL and Arch Linux</li>
@@ -353,12 +386,10 @@
                     <div class="tab_content_card_content">
                         <div class="tab_content_card_title">Contact</div>
                         <p>
-                            I can be emailed at
-                            <a
+                            I can be emailed at <a
                                 href="mailto:owen.h.feik@gmail.com"
                                 class="monospace"
-                            >
-                                owen.h.feik@gmail.com</a>.
+                            > owen.h.feik@gmail.com</a>.
                         </p>
                         <p>
                             If you have a question about or have found an issue
@@ -400,9 +431,7 @@
                         </p>
                         <p>
                             Having participated in the club during high school,
-                            gaining experience in Python, including in computer
-                            vision, Arduino and various engineering concepts, I
-                            am now part of the administration and mentoring
+                            I am now part of the administration and mentoring
                             group for the club and have been since 2020.
                         </p>
                         <p>
