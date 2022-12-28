@@ -1,5 +1,4 @@
 import { Component } from 'react';
-import Tab from './Tab'
 import styles from '../styles/Home.module.css'
 
 interface Tab {
@@ -9,54 +8,55 @@ interface Tab {
 
 export default class Tabs extends Component {
     key: string
+    tabs: Tab[]
     state: { activeTab: string }
-    children: JSX.Element[]
+    children: React.ReactNode
 
-    constructor(props: {children: JSX.Element[]}) {
+    constructor(props: {tabs: Tab[]}) {
         super(props)
 
         this.key = "tabs"
-        this.state = { activeTab: "projects" }
-        this.children = props.children
+        this.tabs = props.tabs
+        this.state = { activeTab: this.tabs[0].title.toLowerCase() }
     }
 
     render() {
-        return (
+        this.children = (
             <div className={styles.tabbed}>
                 <div className={styles.tab_header}>
                     {
-                        this.children.map(tab => {
-                            let id = tab.props.title.toLowerCase()
+                        this.tabs.map(tab => {
+                            let id = tab.title.toLowerCase()
                             return <span
                                 className={
                                     styles.tab
-                                    + (
-                                        id === this.state.activeTab
-                                        ? " " + styles.active
-                                        : ""
-                                    )
+                                    + (id === this.state.activeTab ? " " + styles.active : "")
                                 }
                                 key={id}
-                                onClick={
-                                    () => { this.setState({ activeTab: id }) }
-                                }
-                            >{tab.props.title}</span>;
+                                data-tab={id}
+                                onClick={() => { this.setState({ activeTab: id }); console.log(this) }}
+                            >{tab.title}</span>;
                         })
                     }
                 </div>
                 <div className={styles.tab_body}>
                     {
-                        this.children.map(
-                            tab => (
-                                <Tab
-                                    activeTab={this.state.activeTab}
-                                    title={tab.props.title}
-                                >{tab.props.children}</Tab>
-                            )
-                        )
+                        this.tabs.map(tab => {
+                            let id = tab.title.toLowerCase()
+                            return <div
+                                className={
+                                    styles.tab_content
+                                    + (id === this.state.activeTab ? " " + styles.active : "")
+                                }
+                                key={id}
+                                data-tab={id}
+                            >{ tab.body }</div>
+                        })
                     }
                 </div>
             </div>
         )
+
+        return this.children
     }
 }
