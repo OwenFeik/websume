@@ -1,4 +1,5 @@
 use std::{
+    io::Write,
     net::{Ipv4Addr, SocketAddr, TcpListener, TcpStream},
     sync::{
         Arc,
@@ -16,7 +17,7 @@ struct ThreadHandle {
 impl ThreadHandle {
     fn spawn() -> Self {
         let (send, recv) = sync_channel::<TcpStream>(1);
-        let ready = Arc::new(AtomicBool::new(false));
+        let ready = Arc::new(AtomicBool::new(true));
         let handle = Self {
             chan: send,
             ready: ready.clone(),
@@ -25,22 +26,28 @@ impl ThreadHandle {
         handle
     }
 
-    fn submit(&self, stream: TcpStream) -> Result<(), ThreadPoolError> {
+    fn submit(
+        &self,
+        stream: TcpStream,
+    ) -> Result<(), (ThreadPoolError, TcpStream)> {
         if self.ready.load(Ordering::Relaxed) {
             self.ready.store(false, Ordering::Relaxed);
-            self.chan
-                .send(stream)
-                .map_err(|_| ThreadPoolError::HandlerThreadFailed)
+            if let Err(e) = self.chan.send(stream) {
+                Err((ThreadPoolError::HandlerThreadFailed, e.0))
+            } else {
+                Ok(())
+            }
         } else {
-            Err(ThreadPoolError::ThreadNotReady)
+            Err((ThreadPoolError::ThreadNotReady, stream))
         }
     }
 }
 
 fn run_handler(chan: Receiver<TcpStream>, ready: Arc<AtomicBool>) {
-    ready.store(true, Ordering::Relaxed);
-    while let Ok(stream) = chan.recv() {
-        todo!("handle");
+    while let Ok(mut stream) = chan.recv() {
+        if let Err(e) = write_stream(&mut stream, 200, "hello world\n") {
+            eprintln!("Error writing in handler: {e}");
+        }
         ready.store(true, Ordering::Relaxed);
     }
 }
@@ -70,37 +77,57 @@ impl ThreadPool {
             .find(|handle| handle.ready.load(Ordering::Relaxed))
     }
 
-    fn submit(&mut self, stream: TcpStream) -> Result<(), ThreadPoolError> {
+    fn submit(
+        &mut self,
+        stream: TcpStream,
+    ) -> Result<(), (ThreadPoolError, TcpStream)> {
         if let Some(handle) = self.find_ready() {
-            handle
-                .chan
-                .send(stream)
-                .map_err(|_| ThreadPoolError::HandlerThreadFailed)
+            handle.submit(stream)
         } else if self.handles.len() < self.max_threads {
             let handle = ThreadHandle::spawn();
-            let result = handle.chan.send(stream);
+            let result = handle.submit(stream);
             self.handles.push(handle);
-            result.map_err(|_| ThreadPoolError::HandlerThreadFailed)
+            result
         } else {
-            Err(ThreadPoolError::NoThreadsAvailable)
+            Err((ThreadPoolError::NoThreadsAvailable, stream))
         }
     }
 }
 
-fn reply_error(error: ThreadPoolError) {
-    match error {
-        ThreadPoolError::HandlerThreadFailed | ThreadPoolError::ThreadNotReady => todo!("500"),
-        ThreadPoolError::NoThreadsAvailable => todo!("503"),
+fn write_stream(
+    stream: &mut TcpStream,
+    status: u16,
+    text: impl AsRef<[u8]>,
+) -> std::io::Result<()> {
+    let data = text.as_ref();
+    write!(stream, "HTTP/1.1 {status} Reason Phrase\r\n")?;
+    write!(stream, "Content-Type: text/plain\r\n")?;
+    write!(stream, "Content-Length: {}\r\n\r\n", data.len())?;
+    stream.write_all(data)?;
+    Ok(())
+}
+
+fn reply_error(error: ThreadPoolError, mut stream: TcpStream) {
+    let (status, message) = match error {
+        ThreadPoolError::HandlerThreadFailed => (500, "handler thread failed"),
+        ThreadPoolError::ThreadNotReady => (500, "thread not ready"),
+        ThreadPoolError::NoThreadsAvailable => (503, "no threads available"),
+    };
+    if let Err(e) = write_stream(&mut stream, status, format!("{message}\n")) {
+        eprintln!("Write failed in reply_error: {e}");
     }
 }
 
 fn main() -> std::io::Result<()> {
-    let listener = TcpListener::bind(SocketAddr::new(Ipv4Addr::new(0, 0, 0, 0).into(), 2345))?;
+    let listener = TcpListener::bind(SocketAddr::new(
+        Ipv4Addr::new(0, 0, 0, 0).into(),
+        2345,
+    ))?;
     let mut thread_pool = ThreadPool::new();
     loop {
         let (stream, _addr) = listener.accept()?;
-        if let Err(error) = thread_pool.submit(stream) {
-            reply_error(error);
+        if let Err((error, stream)) = thread_pool.submit(stream) {
+            reply_error(error, stream);
         }
     }
 }
