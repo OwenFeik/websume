@@ -9,6 +9,8 @@ use std::{
     thread::spawn,
 };
 
+mod request;
+
 struct ThreadHandle {
     chan: SyncSender<TcpStream>,
     ready: Arc<AtomicBool>,
