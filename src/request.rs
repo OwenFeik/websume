@@ -1,11 +1,42 @@
-use std::{collections::HashMap, path::PathBuf};
+use std::{
+    collections::HashMap, ffi::OsStr, os::unix::ffi::OsStrExt, path::PathBuf,
+};
 
-enum HttpRequestParseFailure {
+#[derive(Debug)]
+enum ParseFailure {
     InvalidHttpVerb,
+    InvalidPathByte(u8),
+    PathTooLong,
+    UnsupportedHttpVersion,
+    MissingNewline,
+    InvalidHeaderByte(u8),
+    HeaderNotValidUtf8,
+    InvalidHeaderSyntax(usize),
 }
 
-pub struct RequestParser(RequestParserInner);
+pub enum ParseOutcome {
+    Ongoing(RequestParser),
+    Complete(HttpRequest),
+    Failed(ParseFailure),
+}
 
+pub struct RequestParser(ParseStep);
+
+impl RequestParser {
+    pub fn new() -> Self {
+        Self(ParseStep::Verb { data: Vec::new() })
+    }
+
+    pub fn parse(self, bytes: &[u8]) -> ParseOutcome {
+        match self.0.parse(bytes) {
+            Err(error) => ParseOutcome::Failed(error),
+            Ok(ParseStep::Body(request)) => ParseOutcome::Complete(request),
+            Ok(step) => ParseOutcome::Ongoing(Self(step)),
+        }
+    }
+}
+
+#[derive(Debug)]
 enum HttpVerb {
     Connect,
     Delete,
@@ -20,9 +51,7 @@ enum HttpVerb {
 }
 
 impl HttpVerb {
-    const MAX_LENGTH: uszie = 7;
-
-    fn from_bytes(data: &[u8]) -> Result<Self, HttpRequestParseFailure> {
+    fn from_bytes(data: &[u8]) -> Result<Self, ParseFailure> {
         match data {
             b"CONNECT" => Ok(Self::Connect),
             b"DELETE" => Ok(Self::Delete),
@@ -33,11 +62,12 @@ impl HttpVerb {
             b"PUT" => Ok(Self::Put),
             b"QUERY" => Ok(Self::Query),
             b"TRACE" => Ok(Self::Trace),
-            _ => Err(HttpRequestParseFailure::InvalidHttpVerb),
+            _ => Err(ParseFailure::InvalidHttpVerb),
         }
     }
 }
 
+#[derive(Debug)]
 enum HttpVersion {
     PointNine,
     OnePointZero,
@@ -46,14 +76,48 @@ enum HttpVersion {
 
 struct HttpRequestLine {}
 
+#[derive(Debug)]
 struct HttpRequest {
     verb: HttpVerb,
     path: PathBuf,
     version: HttpVersion,
-    headers: HashMap<String, String>,
+    headers: HttpHeaders,
 }
 
-enum RequestParserStep {
+#[derive(Debug)]
+struct HttpHeaders(HashMap<String, String>);
+
+impl HttpHeaders {
+    pub fn new() -> Self {
+        Self(HashMap::new())
+    }
+
+    pub fn get(&self, key: impl AsRef<str>) -> Option<&str> {
+        self.0.get(key.as_ref()).map(|string| string.as_str())
+    }
+
+    pub fn insert(&mut self, key: impl ToString, value: String) {
+        self.0.insert(key.to_string(), value);
+    }
+
+    pub fn len(&self) -> usize {
+        self.0.len()
+    }
+}
+
+type ParseStepResult = Result<ParseStep, ParseFailure>;
+
+#[derive(Debug, Default)]
+struct HeaderParseState {
+    header_name_data: Vec<u8>,
+    header_value_data: Vec<u8>,
+    passed_colon: bool,
+    passed_space: bool,
+    passed_return: bool,
+}
+
+#[derive(Debug)]
+enum ParseStep {
     Verb {
         data: Vec<u8>,
     },
@@ -64,55 +128,261 @@ enum RequestParserStep {
     Version {
         verb: HttpVerb,
         path: PathBuf,
-        version_text: String,
+        data: Vec<u8>,
     },
+    Newline(HttpRequest),
     Headers {
         request: HttpRequest,
-        header_name_text: String,
-        header_value_text: String,
-        passed_colon: bool,
-        passed_space: bool,
+        state: HeaderParseState,
     },
     Body(HttpRequest),
 }
 
-impl RequestParserStep {
-    fn parse(self, bytes: &[u8]) -> Result<self, HttpRequestParseFailure> {
-        todo!()
+impl ParseStep {
+    fn parse(mut self, bytes: &[u8]) -> ParseStepResult {
+        for byte in bytes {
+            dbg!(&self);
+            self = self.parse_byte(*byte)?;
+        }
+        Ok(self)
     }
 
-    fn parse_byte(self, byte: u8) -> Result<self, HttpRequestParseFailure> {
+    fn parse_byte(self, byte: u8) -> ParseStepResult {
         match self {
-            Self::Verb { mut data } => match byte {
-                b' ' => {
-                    let verb = HttpVerb::from_bytes(&data)?;
-                    data.clear();
-                    Ok(Self::Path { verb, data })
-                },
-                _ => {
-                    data.push(byte);
-                    if data.len() > HttpVerb::MAX_LENGTH {
-                        Err(HttpRequestParseFailure::InvalidHttpVerb),
-                    } else {
-                        Ok(Self::Verb { data })
-                    }
-                }
-            },
-            Self:Path { verb, mut data } => todo!(),
+            Self::Verb { data } => parse_verb_byte(data, byte),
+            Self::Path { verb, data } => parse_path_byte(verb, data, byte),
+            Self::Version { verb, path, data } => {
+                parse_version_byte(verb, path, data, byte)
+            }
+            Self::Newline(request) => parse_first_newline(request, byte),
+            Self::Headers { request, state } => {
+                parse_headers_byte(request, state, byte)
+            }
+            Self::Body(request) => Ok(Self::Body(request)), // Discard body bytes for now.
         }
     }
 }
 
+fn parse_verb_byte(mut data: Vec<u8>, byte: u8) -> ParseStepResult {
+    const MAX_VERB_LENGTH: usize = 7; // CONNECT / OPTIONS
+    match byte {
+        b' ' => {
+            let verb = HttpVerb::from_bytes(&data)?;
+            data.clear();
+            Ok(ParseStep::Path { verb, data })
+        }
+        _ => {
+            data.push(byte);
+            if data.len() > MAX_VERB_LENGTH {
+                Err(ParseFailure::InvalidHttpVerb)
+            } else {
+                Ok(ParseStep::Verb { data })
+            }
+        }
+    }
+}
+
+fn parse_path_byte(
+    verb: HttpVerb,
+    mut data: Vec<u8>,
+    byte: u8,
+) -> ParseStepResult {
+    const MAX_PATH_LENGTH: usize = 1024;
+    if byte == b' ' {
+        let path = PathBuf::from(OsStr::from_bytes(&data));
+        data.clear();
+        Ok(ParseStep::Version { verb, path, data })
+    } else if is_valid_path_char(byte) {
+        data.push(byte);
+        if data.len() > MAX_PATH_LENGTH {
+            Err(ParseFailure::PathTooLong)
+        } else {
+            Ok(ParseStep::Path { verb, data })
+        }
+    } else {
+        Err(ParseFailure::InvalidPathByte(byte))
+    }
+}
+
 fn is_valid_path_char(byte: u8) -> bool {
-    (
-        (byte >= b'a' && byte <= b'z')
-        || (byte >= b'A' && byte <= b'Z')
-        || (byte >= b'0' && byte <= b'9')
+    byte.is_ascii_alphanumeric()
         || byte == b'-'
         || byte == b'.'
         || byte == b'_'
         || byte == b'~'
-        
-    )
-    
+        || byte == b':'
+        || byte == b'/'
+        || byte == b'?'
+        || byte == b'#'
+        || byte == b'['
+        || byte == b']'
+        || byte == b'@'
+        || byte == b'!'
+        || byte == b'$'
+        || byte == b'&'
+        || byte == b'\''
+        || byte == b'('
+        || byte == b')'
+        || byte == b'*'
+        || byte == b'+'
+        || byte == b','
+        || byte == b';'
+        || byte == b'%'
+        || byte == b'='
+}
+
+fn parse_version_byte(
+    verb: HttpVerb,
+    path: PathBuf,
+    mut data: Vec<u8>,
+    byte: u8,
+) -> ParseStepResult {
+    const MAX_VERSION_LENGTH: usize = "HTTP/1.1".len();
+
+    if byte == b'\r' {
+        let version = match data.as_slice() {
+            b"HTTP/0.9" => HttpVersion::PointNine,
+            b"HTTP/1.0" => HttpVersion::OnePointZero,
+            b"HTTP/1.1" => HttpVersion::OnePointOne,
+            _ => return Err(ParseFailure::UnsupportedHttpVersion),
+        };
+        Ok(ParseStep::Newline(HttpRequest {
+            verb,
+            path,
+            version,
+            headers: HttpHeaders::new(),
+        }))
+    } else {
+        if b"HTTP/091.".contains(&byte) {
+            data.push(byte);
+            if data.len() > MAX_VERSION_LENGTH {
+                Err(ParseFailure::UnsupportedHttpVersion)
+            } else {
+                Ok(ParseStep::Version { verb, path, data })
+            }
+        } else {
+            Err(ParseFailure::UnsupportedHttpVersion)
+        }
+    }
+}
+
+fn parse_first_newline(request: HttpRequest, byte: u8) -> ParseStepResult {
+    if byte == b'\n' {
+        Ok(ParseStep::Headers {
+            request,
+            state: Default::default(),
+        })
+    } else {
+        Err(ParseFailure::MissingNewline)
+    }
+}
+
+fn parse_headers_byte(
+    mut request: HttpRequest,
+    mut state: HeaderParseState,
+    byte: u8,
+) -> ParseStepResult {
+    if state.passed_return {
+        if byte == b'\n'
+            && state.header_name_data.is_empty()
+            && !state.passed_colon
+            && !state.passed_space
+            && state.header_value_data.is_empty()
+        {
+            Ok(ParseStep::Body(request))
+        } else if state.passed_colon && state.passed_space {
+            if let Ok(name) = String::from_utf8(state.header_name_data)
+                && let Ok(value) = String::from_utf8(state.header_value_data)
+            {
+                request.headers.insert(name, value);
+                Ok(ParseStep::Headers {
+                    request,
+                    state: Default::default(),
+                })
+            } else {
+                Err(ParseFailure::HeaderNotValidUtf8)
+            }
+        } else {
+            Err(ParseFailure::InvalidHeaderByte(byte))
+        }
+    } else if state.passed_colon && !state.passed_space {
+        if byte == b' ' {
+            state.passed_space = true;
+            Ok(ParseStep::Headers { request, state })
+        } else {
+            Err(ParseFailure::InvalidHeaderSyntax(request.headers.len()))
+        }
+    } else if state.passed_space {
+        match byte {
+            b'\r' => {
+                state.passed_return = true;
+                Ok(ParseStep::Headers { request, state })
+            }
+            b'\n' | b'\0' => Err(ParseFailure::InvalidHeaderByte(byte)),
+            _ => {
+                state.header_value_data.push(byte);
+                Ok(ParseStep::Headers { request, state })
+            }
+        }
+    } else {
+        if valid_header_name_byte(byte) {
+            state.header_name_data.push(byte);
+            Ok(ParseStep::Headers { request, state })
+        } else if byte == b':' {
+            state.passed_colon = true;
+            Ok(ParseStep::Headers { request, state })
+        } else if byte == b'\r' {
+            state.passed_return = true;
+            Ok(ParseStep::Headers { request, state })
+        } else {
+            Err(ParseFailure::InvalidHeaderByte(byte))
+        }
+    }
+}
+
+fn valid_header_name_byte(byte: u8) -> bool {
+    byte.is_ascii_alphanumeric()
+        || byte == b'!'
+        || byte == b'#'
+        || byte == b'$'
+        || byte == b'%'
+        || byte == b'&'
+        || byte == b'\''
+        || byte == b'*'
+        || byte == b'+'
+        || byte == b'-'
+        || byte == b'.'
+        || byte == b'^'
+        || byte == b'_'
+        || byte == b'`'
+        || byte == b'|'
+        || byte == b'~'
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn test() {
+        let req = concat!(
+            "GET /path/to/../../some/sneaky/file HTTP/1.1\r\n",
+            "Content-Length: 12\r\n",
+            "Content-Type: nonsense\r\n\r\n",
+            "aaaaaaaaaaaa"
+        );
+
+        let request = match RequestParser::new().parse(req.as_bytes()) {
+            ParseOutcome::Ongoing(_) => panic!("parser exited early"),
+            ParseOutcome::Failed(error) => panic!("parse failed: {error:?}"),
+            ParseOutcome::Complete(request) => request,
+        };
+
+        assert!(matches!(request.verb, HttpVerb::Get));
+        assert_eq!(&request.path, "/path/to/../../some/sneaky/file");
+        assert!(matches!(request.version, HttpVersion::OnePointOne));
+        assert_eq!(request.headers.len(), 2);
+        assert_eq!(request.headers.get("Content-Length"), Some("12"));
+        assert_eq!(request.headers.get("Content-Type"), Some("nonsense"));
+    }
 }

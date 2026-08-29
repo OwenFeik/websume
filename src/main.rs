@@ -1,5 +1,5 @@
 use std::{
-    io::Write,
+    io::{Read, Write},
     net::{Ipv4Addr, SocketAddr, TcpListener, TcpStream},
     sync::{
         Arc,
@@ -7,6 +7,7 @@ use std::{
         mpsc::{Receiver, SyncSender, sync_channel},
     },
     thread::spawn,
+    time::Duration,
 };
 
 mod request;
@@ -47,6 +48,11 @@ impl ThreadHandle {
 
 fn run_handler(chan: Receiver<TcpStream>, ready: Arc<AtomicBool>) {
     while let Ok(mut stream) = chan.recv() {
+        if let Err(e) = stream.set_read_timeout(Some(Duration::from_secs(1))) {
+            eprintln!("Error setting stream read timeout: {e}");
+        } else {
+            todo!();
+        }
         if let Err(e) = write_stream(&mut stream, 200, "hello world\n") {
             eprintln!("Error writing in handler: {e}");
         }
