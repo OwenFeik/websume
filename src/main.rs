@@ -46,15 +46,51 @@ impl ThreadHandle {
     }
 }
 
+#[derive(Debug)]
+enum ReceiveError {
+    Io(std::io::Error),
+    Parse(request::ParseFailure),
+}
+
+fn receive_request(
+    buf: &mut [u8],
+    stream: &mut TcpStream,
+) -> Result<request::HttpRequest, ReceiveError> {
+    loop {
+        let mut parser = request::RequestParser::new();
+        match stream.read(buf) {
+            Ok(count) => match parser.parse(&buf[0..count]) {
+                request::ParseOutcome::Ongoing(p) => parser = p,
+                request::ParseOutcome::Complete(request) => return Ok(request),
+                request::ParseOutcome::Failed(error) => {
+                    return Err(ReceiveError::Parse(error));
+                }
+            },
+            Err(e) => {
+                eprintln!("Error reading in handler: {e}");
+                return Err(ReceiveError::Io(e));
+            }
+        }
+    }
+}
+
 fn run_handler(chan: Receiver<TcpStream>, ready: Arc<AtomicBool>) {
+    let mut buf: Box<[u8; 4096]> = Box::new([0; 4096]);
     while let Ok(mut stream) = chan.recv() {
         if let Err(e) = stream.set_read_timeout(Some(Duration::from_secs(1))) {
             eprintln!("Error setting stream read timeout: {e}");
         } else {
-            todo!();
-        }
-        if let Err(e) = write_stream(&mut stream, 200, "hello world\n") {
-            eprintln!("Error writing in handler: {e}");
+            let (status, content) =
+                match receive_request(buf.as_mut_slice(), &mut stream) {
+                    Ok(request) => (
+                        200,
+                        format!("you requested: {}\n", request.path.display()),
+                    ),
+                    Err(e) => (400, format!("bad request: {e:?}\n")),
+                };
+            if let Err(e) = write_stream(&mut stream, status, content) {
+                eprintln!("Error writing in handler: {e}");
+            }
         }
         ready.store(true, Ordering::Relaxed);
     }

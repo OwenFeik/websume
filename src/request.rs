@@ -3,7 +3,7 @@ use std::{
 };
 
 #[derive(Debug)]
-enum ParseFailure {
+pub enum ParseFailure {
     InvalidHttpVerb,
     InvalidPathByte(u8),
     PathTooLong,
@@ -12,6 +12,7 @@ enum ParseFailure {
     InvalidHeaderByte(u8),
     HeaderNotValidUtf8,
     InvalidHeaderSyntax(usize),
+    HeaderTooLong,
 }
 
 pub enum ParseOutcome {
@@ -37,7 +38,7 @@ impl RequestParser {
 }
 
 #[derive(Debug)]
-enum HttpVerb {
+pub enum HttpVerb {
     Connect,
     Delete,
     Get,
@@ -74,18 +75,16 @@ enum HttpVersion {
     OnePointOne,
 }
 
-struct HttpRequestLine {}
-
 #[derive(Debug)]
-struct HttpRequest {
-    verb: HttpVerb,
-    path: PathBuf,
+pub struct HttpRequest {
+    pub verb: HttpVerb,
+    pub path: PathBuf,
     version: HttpVersion,
-    headers: HttpHeaders,
+    pub headers: HttpHeaders,
 }
 
 #[derive(Debug)]
-struct HttpHeaders(HashMap<String, String>);
+pub struct HttpHeaders(HashMap<String, String>);
 
 impl HttpHeaders {
     pub fn new() -> Self {
@@ -141,7 +140,6 @@ enum ParseStep {
 impl ParseStep {
     fn parse(mut self, bytes: &[u8]) -> ParseStepResult {
         for byte in bytes {
-            dbg!(&self);
             self = self.parse_byte(*byte)?;
         }
         Ok(self)
@@ -282,6 +280,9 @@ fn parse_headers_byte(
     mut state: HeaderParseState,
     byte: u8,
 ) -> ParseStepResult {
+    const MAX_HEADER_NAME_LENGTH: usize = 256;
+    const MAX_HEADER_VALUE_LENGTH: usize = 1024;
+
     if state.passed_return {
         if byte == b'\n'
             && state.header_name_data.is_empty()
@@ -321,13 +322,21 @@ fn parse_headers_byte(
             b'\n' | b'\0' => Err(ParseFailure::InvalidHeaderByte(byte)),
             _ => {
                 state.header_value_data.push(byte);
-                Ok(ParseStep::Headers { request, state })
+                if state.header_value_data.len() > MAX_HEADER_VALUE_LENGTH {
+                    Err(ParseFailure::HeaderTooLong)
+                } else {
+                    Ok(ParseStep::Headers { request, state })
+                }
             }
         }
     } else {
         if valid_header_name_byte(byte) {
             state.header_name_data.push(byte);
-            Ok(ParseStep::Headers { request, state })
+            if state.header_name_data.len() > MAX_HEADER_NAME_LENGTH {
+                Err(ParseFailure::HeaderTooLong)
+            } else {
+                Ok(ParseStep::Headers { request, state })
+            }
         } else if byte == b':' {
             state.passed_colon = true;
             Ok(ParseStep::Headers { request, state })
@@ -340,6 +349,7 @@ fn parse_headers_byte(
     }
 }
 
+/// Test if provided byte is valid as part of an HTTP header.
 fn valid_header_name_byte(byte: u8) -> bool {
     byte.is_ascii_alphanumeric()
         || byte == b'!'
@@ -364,7 +374,7 @@ mod test {
     use super::*;
 
     #[test]
-    fn test() {
+    fn test_valid_request() {
         let req = concat!(
             "GET /path/to/../../some/sneaky/file HTTP/1.1\r\n",
             "Content-Length: 12\r\n",
@@ -384,5 +394,113 @@ mod test {
         assert_eq!(request.headers.len(), 2);
         assert_eq!(request.headers.get("Content-Length"), Some("12"));
         assert_eq!(request.headers.get("Content-Type"), Some("nonsense"));
+    }
+
+    #[test]
+    fn test_one_line_request() {
+        let ParseOutcome::Complete(request) =
+            RequestParser::new().parse(b"CONNECT / HTTP/1.0\r\n\r\n")
+        else {
+            panic!();
+        };
+        assert!(matches!(request.verb, HttpVerb::Connect));
+        assert_eq!(&request.path, "/");
+        assert!(matches!(request.version, HttpVersion::OnePointZero));
+        assert_eq!(request.headers.len(), 0);
+    }
+
+    #[test]
+    fn test_invalid_verb() {
+        let ParseOutcome::Failed(ParseFailure::InvalidHttpVerb) =
+            RequestParser::new().parse(b"GONT /some/path HTTP/0.9\r\n\r\n")
+        else {
+            panic!("GONT should have been rejected");
+        };
+    }
+
+    #[test]
+    fn test_verb_too_long() {
+        let ParseOutcome::Failed(ParseFailure::InvalidHttpVerb) =
+            RequestParser::new()
+                .parse(b"CONNECTTO /some/path HTTP/1.1\r\n\r\n")
+        else {
+            panic!("GONT should have been rejected");
+        };
+    }
+
+    #[test]
+    fn test_invalid_path_byte_nul() {
+        let ParseOutcome::Failed(ParseFailure::InvalidPathByte(0)) =
+            RequestParser::new().parse(b"QUERY /null/\0/byte HTTP/0.9\r\n")
+        else {
+            panic!();
+        };
+    }
+
+    #[test]
+    fn test_invalid_path_byte_quote() {
+        let ParseOutcome::Failed(ParseFailure::InvalidPathByte(b'"')) =
+            RequestParser::new().parse(b"QUERY /quote/\" HTTP/0.9\r\n")
+        else {
+            panic!();
+        };
+    }
+
+    #[test]
+    fn test_path_too_long() {
+        let ParseOutcome::Failed(ParseFailure::PathTooLong) =
+            RequestParser::new().parse(
+                format!(
+                    "HEAD /long/ass/file/{} HTTP/1.0\r\n\r\n",
+                    "a".repeat(2222)
+                )
+                .as_bytes(),
+            )
+        else {
+            panic!();
+        };
+    }
+
+    #[test]
+    fn test_unsupported_version() {
+        let ParseOutcome::Failed(ParseFailure::UnsupportedHttpVersion) =
+            RequestParser::new().parse(b"POST /myfile HTTP/2.0\r\n")
+        else {
+            panic!();
+        };
+    }
+
+    #[test]
+    fn test_nonsense_in_version() {
+        let ParseOutcome::Failed(ParseFailure::UnsupportedHttpVersion) =
+            RequestParser::new().parse(b"GET / aaabbbccc\r\n")
+        else {
+            panic!();
+        };
+        let ParseOutcome::Failed(ParseFailure::UnsupportedHttpVersion) =
+            RequestParser::new().parse(b"GET / GET\r\n")
+        else {
+            panic!();
+        };
+        let ParseOutcome::Failed(ParseFailure::UnsupportedHttpVersion) =
+            RequestParser::new().parse(b"GET / \0\0\0\0\r\n")
+        else {
+            panic!();
+        };
+        let ParseOutcome::Failed(ParseFailure::UnsupportedHttpVersion) =
+            RequestParser::new().parse(b"GET / HTTP/1.1 \r\n")
+        else {
+            panic!();
+        };
+    }
+
+    #[test]
+    fn test_missing_newline() {
+        let ParseOutcome::Failed(ParseFailure::MissingNewline) =
+            RequestParser::new()
+                .parse(b"QUERY /database HTTP/0.9\rAccept: data\r\n\r\n")
+        else {
+            panic!();
+        };
     }
 }
