@@ -2,6 +2,7 @@ use std::{
     collections::HashMap, ffi::OsStr, os::unix::ffi::OsStrExt, path::PathBuf,
 };
 
+/// Errors that can be encountered while parsing an HTTP request.
 #[derive(Debug)]
 pub enum ParseFailure {
     InvalidHttpVerb,
@@ -15,19 +16,26 @@ pub enum ParseFailure {
     HeaderTooLong,
 }
 
+/// Potential outcomes of parsing a buffer of bytes as part of an HTTP request.
+/// `Ongoing` if the request is incomplete, `Complete` if the request was
+/// finished by the provided buffer and `Failed` on a parse error.
 pub enum ParseOutcome {
     Ongoing(RequestParser),
     Complete(HttpRequest),
     Failed(ParseFailure),
 }
 
+/// Parses request data into a [HttpRequest].
 pub struct RequestParser(ParseStep);
 
 impl RequestParser {
+    /// Create a fresh [RequestParser].
     pub fn new() -> Self {
         Self(ParseStep::Verb { data: Vec::new() })
     }
 
+    /// Parse the provided `bytes` as part of HTTP request, returning an outcome
+    /// describing the state of the parse.
     pub fn parse(self, bytes: &[u8]) -> ParseOutcome {
         match self.0.parse(bytes) {
             Err(error) => ParseOutcome::Failed(error),
@@ -37,6 +45,7 @@ impl RequestParser {
     }
 }
 
+/// Valid HTTP request verbs.
 #[derive(Debug)]
 pub enum HttpVerb {
     Connect,
@@ -52,6 +61,7 @@ pub enum HttpVerb {
 }
 
 impl HttpVerb {
+    /// Return the enum representation of the provided HTTP verb byte string.
     fn from_bytes(data: &[u8]) -> Result<Self, ParseFailure> {
         match data {
             b"CONNECT" => Ok(Self::Connect),
@@ -68,6 +78,7 @@ impl HttpVerb {
     }
 }
 
+/// Supported HTTP versions.
 #[derive(Debug)]
 enum HttpVersion {
     PointNine,
@@ -75,6 +86,7 @@ enum HttpVersion {
     OnePointOne,
 }
 
+/// An HTTP request, including headers but not body.
 #[derive(Debug)]
 pub struct HttpRequest {
     pub verb: HttpVerb,
@@ -83,22 +95,27 @@ pub struct HttpRequest {
     pub headers: HttpHeaders,
 }
 
+/// Headers from an [HttpRequest].
 #[derive(Debug)]
 pub struct HttpHeaders(HashMap<String, String>);
 
 impl HttpHeaders {
+    /// Create a new empty set of headers.
     pub fn new() -> Self {
         Self(HashMap::new())
     }
 
+    /// Retrieve the value of the provided header, if any.
     pub fn get(&self, key: impl AsRef<str>) -> Option<&str> {
         self.0.get(key.as_ref()).map(|string| string.as_str())
     }
 
+    /// Add a header to this header map.
     pub fn insert(&mut self, key: impl ToString, value: String) {
         self.0.insert(key.to_string(), value);
     }
 
+    /// Number of headers present.
     pub fn len(&self) -> usize {
         self.0.len()
     }
@@ -106,6 +123,7 @@ impl HttpHeaders {
 
 type ParseStepResult = Result<ParseStep, ParseFailure>;
 
+/// State of parsing an HTTP header line.
 #[derive(Debug, Default)]
 struct HeaderParseState {
     header_name_data: Vec<u8>,
@@ -115,6 +133,7 @@ struct HeaderParseState {
     passed_return: bool,
 }
 
+/// States involved in passing an HTTP request.
 #[derive(Debug)]
 enum ParseStep {
     Verb {
@@ -138,6 +157,8 @@ enum ParseStep {
 }
 
 impl ParseStep {
+    /// Parse the provided bytes, returning the updated parse step after
+    /// processing all bytes, or an error.
     fn parse(mut self, bytes: &[u8]) -> ParseStepResult {
         for byte in bytes {
             self = self.parse_byte(*byte)?;
@@ -145,6 +166,7 @@ impl ParseStep {
         Ok(self)
     }
 
+    /// Parse a single byte, returning the updated parse step or an error.
     fn parse_byte(self, byte: u8) -> ParseStepResult {
         match self {
             Self::Verb { data } => parse_verb_byte(data, byte),
@@ -161,6 +183,8 @@ impl ParseStep {
     }
 }
 
+/// Parse one byte of the HTTP verb. Will advance to [ParseStep::Path] after
+/// successfully parsing a full verb.
 fn parse_verb_byte(mut data: Vec<u8>, byte: u8) -> ParseStepResult {
     const MAX_VERB_LENGTH: usize = 7; // CONNECT / OPTIONS
     match byte {

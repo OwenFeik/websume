@@ -1,5 +1,6 @@
 use std::fmt::Display;
 
+/// HTTP status codes.
 #[derive(Debug, Clone, Copy)]
 #[repr(u16)]
 pub enum Status {
@@ -11,6 +12,7 @@ pub enum Status {
 }
 
 impl Status {
+    /// Return the numeric value of this status code.
     pub fn code(&self) -> u16 {
         *self as u16
     }

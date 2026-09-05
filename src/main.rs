@@ -19,12 +19,15 @@ use crate::http::Status;
 mod http;
 mod request;
 
+/// Handle which holds a channel to send new connections to a handler thread.
 struct ThreadHandle {
     chan: SyncSender<TcpStream>,
     ready: Arc<AtomicBool>,
 }
 
 impl ThreadHandle {
+    /// Start a background handler thread and return a handle to submit
+    /// connections for that thread to handle.
     fn spawn() -> Self {
         let (send, recv) = sync_channel::<TcpStream>(1);
         let ready = Arc::new(AtomicBool::new(true));
@@ -36,6 +39,9 @@ impl ThreadHandle {
         handle
     }
 
+    /// Submit a new connection for this thread to handle. If this fails because
+    /// the handler thread is busy or has itself failed, returns an appropriate
+    /// error and the stream back to the caller.
     fn submit(
         &self,
         stream: TcpStream,
@@ -53,12 +59,16 @@ impl ThreadHandle {
     }
 }
 
+/// Errors that can be encountered while receiving a request from a client
+/// connection.
 #[derive(Debug)]
 enum ReceiveError {
     Io(std::io::Error),
     Parse(request::ParseFailure),
 }
 
+/// Receive a single HTTP request from the provided stream, using buf to buffer
+/// data from the stream.
 fn receive_request(
     buf: &mut [u8],
     stream: &mut TcpStream,
@@ -82,6 +92,7 @@ fn receive_request(
 }
 
 unsafe extern "C" {
+    /// Copy count bytes from in_fd to out_fd using the sendfile syscall.
     fn sendfile64(
         out_fd: i32,
         in_fd: i32,
@@ -90,6 +101,8 @@ unsafe extern "C" {
     ) -> isize;
 }
 
+/// Send the file located at `path` through `stream` using the `sendfile64`
+/// syscall.
 fn send_file(path: &Path, stream: &mut TcpStream) -> std::io::Result<()> {
     let file = File::open(path)?;
     let out_fd = stream.as_raw_fd();
@@ -107,6 +120,8 @@ fn send_file(path: &Path, stream: &mut TcpStream) -> std::io::Result<()> {
     }
 }
 
+/// Reply to a `GET path` with the contents of the file at `path`, or an
+/// appropriate error.
 fn reply_file(path: &Path, mut stream: TcpStream) -> std::io::Result<()> {
     let Ok(relative) = path.strip_prefix("/") else {
         return respond_with_data(&mut stream, Status::NotFound, "not found");
@@ -121,6 +136,9 @@ fn reply_file(path: &Path, mut stream: TcpStream) -> std::io::Result<()> {
     Ok(())
 }
 
+/// Handle incoming connections from `chan` indefinitely. `ready` will be set to
+/// true whenever a connection is finished, to indicate that this handler is
+/// ready to receive a new connection.
 fn run_handler(chan: Receiver<TcpStream>, ready: Arc<AtomicBool>) {
     let mut buf: Box<[u8; 4096]> = Box::new([0; 4096]);
     while let Ok(mut stream) = chan.recv() {
@@ -144,11 +162,14 @@ fn run_handler(chan: Receiver<TcpStream>, ready: Arc<AtomicBool>) {
     }
 }
 
+/// Pool of handler threads to handle incoming connections.
 struct ThreadPool {
     max_threads: usize,
     handles: Vec<ThreadHandle>,
 }
 
+/// Errors that can occur when attempting to submit a new connection to a
+/// handler.
 enum ThreadPoolError {
     NoThreadsAvailable,
     HandlerThreadFailed,
@@ -156,19 +177,25 @@ enum ThreadPoolError {
 }
 
 impl ThreadPool {
+    /// Create a new thread pool.
     fn new() -> Self {
+        const MAX_THREADS: usize = 32;
         Self {
-            max_threads: 32,
+            max_threads: MAX_THREADS,
             handles: Vec::new(),
         }
     }
 
+    /// Find a thread that is ready to receive a connection and return a handle
+    /// to it.
     fn find_ready(&self) -> Option<&ThreadHandle> {
         self.handles
             .iter()
             .find(|handle| handle.ready.load(Ordering::Relaxed))
     }
 
+    /// Submit a new connection to be handled by a handler thread. Returns an
+    /// error and the connection if no thread can handle the request.
     fn submit(
         &mut self,
         stream: TcpStream,
@@ -186,6 +213,8 @@ impl ThreadPool {
     }
 }
 
+/// Write out an HTTP response up to the start of the body data, providing the
+/// appropriate Content-Length as specified by `length`.
 fn write_response_headers(
     stream: &mut TcpStream,
     status: Status,
@@ -197,6 +226,8 @@ fn write_response_headers(
     Ok(())
 }
 
+/// Write an HTTP response to `stream` with the provided `status` and body
+/// `data`.
 fn respond_with_data(
     stream: &mut TcpStream,
     status: Status,
@@ -208,6 +239,7 @@ fn respond_with_data(
     Ok(())
 }
 
+/// Send a response on `stream` describing the error encountered.
 fn reply_error(error: ThreadPoolError, mut stream: TcpStream) {
     let (status, message) = match error {
         ThreadPoolError::HandlerThreadFailed => {
