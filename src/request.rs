@@ -1,6 +1,4 @@
-use std::{
-    collections::HashMap, ffi::OsStr, os::unix::ffi::OsStrExt, path::PathBuf,
-};
+use std::collections::HashMap;
 
 /// Errors that can be encountered while parsing an HTTP request.
 #[derive(Debug)]
@@ -90,7 +88,7 @@ enum HttpVersion {
 #[derive(Debug)]
 pub struct HttpRequest {
     pub verb: HttpVerb,
-    pub path: PathBuf,
+    pub path: String,
     version: HttpVersion,
     pub headers: HttpHeaders,
 }
@@ -145,7 +143,7 @@ enum ParseStep {
     },
     Version {
         verb: HttpVerb,
-        path: PathBuf,
+        path: String,
         data: Vec<u8>,
     },
     Newline(HttpRequest),
@@ -204,6 +202,10 @@ fn parse_verb_byte(mut data: Vec<u8>, byte: u8) -> ParseStepResult {
     }
 }
 
+/// Parse a single byte as part of the request path. Once all path bytes have
+/// been parsed this was and a space is reached, advances to
+/// [ParseStep::Version]. Returns an error if there is an invalid byte in the
+/// path or if the path is too long.
 fn parse_path_byte(
     verb: HttpVerb,
     mut data: Vec<u8>,
@@ -211,9 +213,19 @@ fn parse_path_byte(
 ) -> ParseStepResult {
     const MAX_PATH_LENGTH: usize = 1024;
     if byte == b' ' {
-        let path = PathBuf::from(OsStr::from_bytes(&data));
-        data.clear();
-        Ok(ParseStep::Version { verb, path, data })
+        match String::from_utf8(data) {
+            Ok(path) => Ok(ParseStep::Version {
+                verb,
+                path,
+                data: Vec::new(),
+            }),
+            Err(e) => {
+                let error_index = e.utf8_error().valid_up_to();
+                let data = e.into_bytes();
+                let error_byte = data.get(error_index).copied().unwrap_or(b' ');
+                Err(ParseFailure::InvalidPathByte(error_byte))
+            }
+        }
     } else if is_valid_path_char(byte) {
         data.push(byte);
         if data.len() > MAX_PATH_LENGTH {
@@ -226,6 +238,7 @@ fn parse_path_byte(
     }
 }
 
+/// Check if the provided byte is valid in a request path.
 fn is_valid_path_char(byte: u8) -> bool {
     byte.is_ascii_alphanumeric()
         || byte == b'-'
@@ -253,9 +266,12 @@ fn is_valid_path_char(byte: u8) -> bool {
         || byte == b'='
 }
 
+/// Parse a single byte of the HTTP version, returning [ParseStep::Newline] to
+/// finish the first line once the version is fully parsed, or an error if the
+/// version did not match a supported [HttpVersion].
 fn parse_version_byte(
     verb: HttpVerb,
-    path: PathBuf,
+    path: String,
     mut data: Vec<u8>,
     byte: u8,
 ) -> ParseStepResult {
@@ -288,6 +304,8 @@ fn parse_version_byte(
     }
 }
 
+/// Parse a single newline after the first line and carriage return and return
+/// [ParseStep::Headers]. Returns an error if the byte is not a newline.
 fn parse_first_newline(request: HttpRequest, byte: u8) -> ParseStepResult {
     if byte == b'\n' {
         Ok(ParseStep::Headers {
@@ -299,6 +317,9 @@ fn parse_first_newline(request: HttpRequest, byte: u8) -> ParseStepResult {
     }
 }
 
+/// Parse a single byte as part of a line in the request headers, updating
+/// state and adding any completed headers to the request. On parsing the final
+/// header returns [ParseStep::Body].
 fn parse_headers_byte(
     mut request: HttpRequest,
     mut state: HeaderParseState,

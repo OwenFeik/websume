@@ -1,10 +1,9 @@
 use std::{
     fs::File,
-    io::{ErrorKind::FileTooLarge, Read, Seek, Write},
+    io::{Read, Write},
     net::{Ipv4Addr, SocketAddr, TcpListener, TcpStream},
     os::{fd::AsRawFd, unix::fs::MetadataExt},
-    path::{Path, PathBuf},
-    ptr::null_mut,
+    path::Path,
     sync::{
         Arc,
         atomic::{AtomicBool, Ordering},
@@ -18,6 +17,7 @@ use crate::http::Status;
 
 mod http;
 mod request;
+mod url;
 
 /// Handle which holds a channel to send new connections to a handler thread.
 struct ThreadHandle {
@@ -61,6 +61,7 @@ impl ThreadHandle {
 
 /// Errors that can be encountered while receiving a request from a client
 /// connection.
+#[expect(dead_code)] // Fields for error information.
 #[derive(Debug)]
 enum ReceiveError {
     Io(std::io::Error),
@@ -122,11 +123,9 @@ fn send_file(path: &Path, stream: &mut TcpStream) -> std::io::Result<()> {
 
 /// Reply to a `GET path` with the contents of the file at `path`, or an
 /// appropriate error.
-fn reply_file(path: &Path, mut stream: TcpStream) -> std::io::Result<()> {
-    let Ok(relative) = path.strip_prefix("/") else {
-        return respond_with_data(&mut stream, Status::NotFound, "not found");
-    };
-    if let Err(e) = send_file(&relative, &mut stream) {
+fn reply_file(path: &str, mut stream: TcpStream) -> std::io::Result<()> {
+    let path = url::parse_path(path);
+    if let Err(e) = send_file(&path, &mut stream) {
         let status = match e.kind() {
             std::io::ErrorKind::NotFound => Status::NotFound,
             _ => Status::InternalServerError,
