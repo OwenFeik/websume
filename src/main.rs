@@ -102,14 +102,28 @@ unsafe extern "C" {
     ) -> isize;
 }
 
+/// Determine appropriate mime (content) type based on file extension.
+fn mime_type(path: &Path) -> &'static str {
+    match path.extension().and_then(std::ffi::OsStr::to_str) {
+        Some("css") => "text/css",
+        Some("html") => "text/html",
+        Some("js") => "text/javascript",
+        Some("mp4") => "video/mp4",
+        Some("png") => "image/png",
+        Some("svg") => "image/svg+xml",
+        Some("tty") => "font/ttf",
+        _ => "text/plain",
+    }
+}
+
 /// Send the file located at `path` through `stream` using the `sendfile64`
-/// syscall.
+/// syscall. Sets Content-Type based on file extension.
 fn send_file(path: &Path, stream: &mut TcpStream) -> std::io::Result<()> {
     let file = File::open(path)?;
     let out_fd = stream.as_raw_fd();
     let in_fd = file.as_raw_fd();
     let count = file.metadata()?.size() as usize;
-    write_response_headers(stream, Status::Ok, count)?;
+    write_response_headers(stream, Status::Ok, mime_type(path), count)?;
     let ret = unsafe { sendfile64(out_fd, in_fd, std::ptr::null_mut(), count) };
     if ret <= 0 {
         Err(std::io::Error::new(
@@ -124,15 +138,24 @@ fn send_file(path: &Path, stream: &mut TcpStream) -> std::io::Result<()> {
 /// Reply to a `GET path` with the contents of the file at `path`, or an
 /// appropriate error.
 fn reply_file(path: &str, mut stream: TcpStream) -> std::io::Result<()> {
-    let path = url::parse_path(path);
-    if let Err(e) = send_file(&path, &mut stream) {
-        let status = match e.kind() {
-            std::io::ErrorKind::NotFound => Status::NotFound,
-            _ => Status::InternalServerError,
-        };
-        respond_with_data(&mut stream, status, format!("error: {e}\n"))?;
+    match url::parse_path(path.as_bytes()) {
+        Ok(path) => {
+            if let Err(e) = send_file(&path, &mut stream) {
+                let status = match e.kind() {
+                    std::io::ErrorKind::NotFound => Status::NotFound,
+                    _ => Status::InternalServerError,
+                };
+                respond_with_data(&mut stream, status, format!("error: {e}\n"))
+            } else {
+                Ok(())
+            }
+        }
+        Err(e) => respond_with_data(
+            &mut stream,
+            Status::BadRequest,
+            format!("error: {e:?}\n"),
+        ),
     }
-    Ok(())
 }
 
 /// Handle incoming connections from `chan` indefinitely. `ready` will be set to
@@ -217,10 +240,11 @@ impl ThreadPool {
 fn write_response_headers(
     stream: &mut TcpStream,
     status: Status,
+    content_type: &'static str,
     length: usize,
 ) -> std::io::Result<()> {
     write!(stream, "HTTP/1.1 {} {status}\r\n", status.code())?;
-    write!(stream, "Content-Type: text/plain\r\n")?;
+    write!(stream, "Content-Type: {content_type}\r\n",)?;
     write!(stream, "Content-Length: {}\r\n\r\n", length)?;
     Ok(())
 }
@@ -233,7 +257,7 @@ fn respond_with_data(
     data: impl AsRef<[u8]>,
 ) -> std::io::Result<()> {
     let data = data.as_ref();
-    write_response_headers(stream, status, data.len())?;
+    write_response_headers(stream, status, "text/plain", data.len())?;
     stream.write_all(data)?;
     Ok(())
 }
