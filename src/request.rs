@@ -44,7 +44,7 @@ impl RequestParser {
 }
 
 /// Valid HTTP request verbs.
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq)]
 pub enum HttpVerb {
     Connect,
     Delete,
@@ -87,7 +87,7 @@ enum HttpVersion {
 /// An HTTP request, including headers but not body.
 #[derive(Debug)]
 pub struct HttpRequest {
-    pub verb: HttpVerb,
+    pub method: HttpVerb,
     pub path: String,
     version: HttpVersion,
     pub headers: HttpHeaders,
@@ -285,7 +285,7 @@ fn parse_version_byte(
             _ => return Err(ParseFailure::UnsupportedHttpVersion),
         };
         Ok(ParseStep::Newline(HttpRequest {
-            verb,
+            method: verb,
             path,
             version,
             headers: HttpHeaders::new(),
@@ -433,7 +433,7 @@ mod test {
             ParseOutcome::Complete(request) => request,
         };
 
-        assert!(matches!(request.verb, HttpVerb::Get));
+        assert!(matches!(request.method, HttpVerb::Get));
         assert_eq!(&request.path, "/path/to/../../some/sneaky/file");
         assert!(matches!(request.version, HttpVersion::OnePointOne));
         assert_eq!(request.headers.len(), 2);
@@ -448,7 +448,7 @@ mod test {
         else {
             panic!();
         };
-        assert!(matches!(request.verb, HttpVerb::Connect));
+        assert!(matches!(request.method, HttpVerb::Connect));
         assert_eq!(&request.path, "/");
         assert!(matches!(request.version, HttpVersion::OnePointZero));
         assert_eq!(request.headers.len(), 0);

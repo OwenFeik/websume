@@ -139,7 +139,14 @@ fn send_file(path: &Path, stream: &mut TcpStream) -> std::io::Result<()> {
 /// appropriate error.
 fn reply_file(path: &str, mut stream: TcpStream) -> std::io::Result<()> {
     match url::parse_path(path.as_bytes()) {
-        Ok(path) => {
+        Ok(mut path) => {
+            if !path.exists() {
+                let index = path.join("index.html");
+                if index.exists() {
+                    path = index;
+                }
+            }
+
             if let Err(e) = send_file(&path, &mut stream) {
                 let status = match e.kind() {
                     std::io::ErrorKind::NotFound => Status::NotFound,
@@ -169,7 +176,17 @@ fn run_handler(chan: Receiver<TcpStream>, ready: Arc<AtomicBool>) {
         } else {
             let result = match receive_request(buf.as_mut_slice(), &mut stream)
             {
-                Ok(request) => reply_file(&request.path, stream),
+                Ok(request) => {
+                    if request.method == request::HttpVerb::Get {
+                        reply_file(&request.path, stream)
+                    } else {
+                        respond_with_data(
+                            &mut stream,
+                            Status::MethodNotAllowed,
+                            "this path accepts only GET requests\n",
+                        )
+                    }
+                }
                 Err(e) => respond_with_data(
                     &mut stream,
                     Status::BadRequest,

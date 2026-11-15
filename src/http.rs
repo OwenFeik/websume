@@ -7,6 +7,7 @@ pub enum Status {
     Ok = 200,
     BadRequest = 400,
     NotFound = 404,
+    MethodNotAllowed = 405,
     InternalServerError = 500,
     ServiceUnavailable = 503,
 }
